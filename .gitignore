@@ -1,0 +1,7 @@
+*.db
+
+*.csv
+
+src/db_csv/
+src/db_triplets/
+venv_alloykg/
