@@ -8,8 +8,8 @@ from zhipuai import ZhipuAI
 # 配置 API 与路径
 # -------------------------
 API_KEY = os.getenv("ZHIPU_API_KEY")
-RAW_CSV_FOLDER = "./db_csv"        # 原始 CSV 文件夹
-OUTPUT_DIR = "./db_triplets" # 输出三元组目录
+RAW_CSV_FOLDER = "../data/db_csv"        # 原始 CSV 文件夹
+OUTPUT_DIR = "../data/db_triplets" # 输出三元组目录
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -87,10 +87,10 @@ async def extract_triplets_from_csv(csv_file, N):
     else:
         raise ValueError("未知的CSV格式")
     prompt = f"""
-            请从以下材料信息中提取制作知识图谱的三元组(element1, element2, relation)，即element1 has/have relation to element2
+            请从以下材料信息中提取制作知识图谱的三元组(entity1, entity2, relation)，
+            请保证三元组格式正确，内容完整，同时输出时每行的格式为entity1, entity2, relation，不需要序号、括号等冗余字符。
             包括材料名称、类别、特性、应用等。每行一个三元组：
             {csv_text}
-            请保证三元组格式正确，内容完整，同时输出时每行的格式为element1, element2, relation，不需要序号、括号等冗余字符。
             """
     triplets_text = await glm4_complete(prompt)
     
@@ -113,7 +113,7 @@ def save_triplets_csv(triplets, output_file):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Element1", "Element2", "Relation"])
+        writer.writerow(["Entity1", "Entity2", "Relation"])
         writer.writerows(triplets)
     print(f"Triplets saved to {output_file}")
 

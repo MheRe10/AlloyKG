@@ -1,7 +1,6 @@
 *.db
-
+*.json
 *.csv
 
-src/db_csv/
-src/db_triplets/
+data/
 venv_alloykg/

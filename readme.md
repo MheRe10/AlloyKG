@@ -1,6 +1,7 @@
 #激活虚拟环境
 venv_alloykg\Scripts\activate
 
+#Enter ZHIPU API KEY
 $env:ZHIPU_API_KEY="a3d236a6017d4cfc9f15c509a3e7c786.eZIIBa9QmssnGEsv"
 
 
@@ -18,3 +19,6 @@ python inspect_db.py materials.db --export Properties
 
 #Extract triplets from database
 python extract_triplets_db.py
+
+#Extract triplets from parsed-paper json
+python extract_triplets_json.py
