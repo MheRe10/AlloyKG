@@ -10,8 +10,8 @@ from raganything.modalprocessors import ImageModalProcessor, TableModalProcessor
 # 配置 API 与路径
 # -------------------------
 API_KEY = os.getenv("ZHIPU_API_KEY")
-RAG_STORAGE = "./rag_storage"
-OUTPUT_DIR = "./data/processed"
+RAG_STORAGE = "../data/raw_paper"
+OUTPUT_DIR = "../data/processed_paper"
 
 # -------------------------
 # LightRAG 初始化
@@ -41,7 +41,7 @@ vision_model_func = glm4_complete
 
 async def main():
     config = RAGAnythingConfig(
-        working_dir="./rag_storage",
+        working_dir="../data/rag_storage",
         parser="mineru",
         parse_method="auto",
         enable_image_processing=True,
@@ -61,8 +61,8 @@ async def main():
     )
 
     await rag.process_folder_complete(
-        folder_path="./data/raw1",      # 你的PDF文件夹路径
-        output_dir="./data/processed",  # 输出目录
+        folder_path="../data/raw_paper",      # 你的PDF文件夹路径
+        output_dir="../data/processed_paper",  # 输出目录
         file_extensions=[".pdf"],       # 只处理PDF
         recursive=True,
         max_workers=4

@@ -87,8 +87,8 @@ async def extract_triplets_from_csv(csv_file, N):
     else:
         raise ValueError("未知的CSV格式")
     prompt = f"""
-            请从以下材料信息中提取制作知识图谱的三元组(entity1, entity2, relation)，
-            请保证三元组格式正确，内容完整，同时输出时每行的格式为entity1, entity2, relation，不需要序号、括号等冗余字符。
+            请从以下材料信息中提取制作知识图谱的三元组(entity1,  relation, entity2)，
+            请保证三元组格式正确，内容完整，同时输出时每行的格式为entity1, relation, entity2，不需要序号、括号等冗余字符。
             包括材料名称、类别、特性、应用等。每行一个三元组：
             {csv_text}
             """
@@ -113,7 +113,7 @@ def save_triplets_csv(triplets, output_file):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Entity1", "Entity2", "Relation"])
+        writer.writerow(["Entity1", "Relation", "Entity2"])
         writer.writerows(triplets)
     print(f"Triplets saved to {output_file}")
 
