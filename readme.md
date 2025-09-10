@@ -1,6 +1,9 @@
 #激活虚拟环境
 venv_alloykg\Scripts\activate
 
+#更新依赖 pip freeze > requirements.txt
+pip install -r requirements.txt
+
 #Enter ZHIPU API KEY
 $env:ZHIPU_API_KEY="a3d236a6017d4cfc9f15c509a3e7c786.eZIIBa9QmssnGEsv"
 
@@ -9,7 +12,7 @@ python parse_papers.py
 
 #Using SQlite database
 #Checking the format of the table and the data of first 20 rows
-python inspect_db.py materials.db
+python inspect_db.py ../data/materials.db
 #Checking the format of the table and the data of first 50 rows
 python inspect_db.py materials.db 50
 #Export a table to a csv file
@@ -22,3 +25,6 @@ python extract_triplets_db.py
 
 #Extract triplets from parsed-paper json
 python extract_triplets_json.py
+
+#End to end RAG-anything
+python ragall.py

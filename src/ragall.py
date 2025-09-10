@@ -7,7 +7,7 @@ import os
 
 async def main():
     # Set up API configuration
-    api_key = "a3d236a6017d4cfc9f15c509a3e7c786.eZIIBa9QmssnGEsv"
+    api_key = "c8816e1e3994470cafdf3faf1cb615b2.1odILGJjyFhZ1vNS"
     base_url = "your-base-url"  # Optional
 
     # Create RAGAnything configuration
@@ -15,30 +15,32 @@ async def main():
         working_dir="../data/end_to_end/rag_storage",
         parser="mineru",  # Parser selection: mineru or docling
         parse_method="auto",  # Parse method: auto, ocr, or txt
-        enable_image_processing=True,
+        enable_image_processing=False,  # 禁用图像处理避免错误
         enable_table_processing=True,
         enable_equation_processing=True,
     )
 
     # Define LLM model function
-    def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
-        return zhipu_complete_if_cache(
+    async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
+        return await zhipu_complete_if_cache(
             prompt,
-            model="glm-4",  
+            model="glm-4.5-flash",  
             api_key=api_key,
             system_prompt=system_prompt,
             history_messages=history_messages,
             **kwargs,
         )
     
-    def vision_model_func(
+    async def vision_model_func(
         prompt, system_prompt=None, history_messages=[], 
         image_data=None, messages=None, **kwargs
     ):
         if messages or image_data:
             print("Vision model function with multimodal input is not implemented yet.")
+            # 返回一个简单的文本回复，避免 None 错误
+            return "Image processing is not implemented yet."
         else:
-            return llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+            return await llm_model_func(prompt, system_prompt, history_messages, **kwargs)
         
         
     #TODO: Define vision model function for image processing
@@ -128,22 +130,24 @@ async def main():
     # Query the processed content
     # Pure text query - for basic knowledge base search
     text_result = await rag.aquery(
-        "What are the main findings shown in the figures and tables?",
-        mode="hybrid"
+        "What's the most frequently mentioned topic in the documents?",
+        mode="hybrid",
+        enable_rerank=False
     )
     print("Text query result:", text_result)
 
     # Multimodal query with specific multimodal content
-    multimodal_result = await rag.aquery_with_multimodal(
-    "Explain this formula and its relevance to the document content",
-    multimodal_content=[{
-        "type": "equation",
-        "latex": "P(d|q) = \\frac{P(q|d) \\cdot P(d)}{P(q)}",
-        "equation_caption": "Document relevance probability"
-    }],
-    mode="hybrid"
-)
-    print("Multimodal query result:", multimodal_result)
+#     multimodal_result = await rag.aquery_with_multimodal(
+#     "Explain this formula and its relevance to the document content",
+#     multimodal_content=[{
+#         "type": "equation",
+#         "latex": "P(d|q) = \\frac{P(q|d) \\cdot P(d)}{P(q)}",
+#         "equation_caption": "Document relevance probability"
+#     }],
+#     mode="hybrid",
+#     enable_rerank=False
+# )
+#     print("Multimodal query result:", multimodal_result)
 
 if __name__ == "__main__":
     asyncio.run(main())
