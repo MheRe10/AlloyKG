@@ -108,15 +108,49 @@ async def main():
     
 
     # Define embedding function
-    embedding_func = EmbeddingFunc(
-        embedding_dim=2048,
-        max_token_size=8192,
-        func=lambda texts: zhipu_embedding(
-            texts,
-            model="embedding-3",
-            api_key=api_key,
-        ),
-    )
+    # EN: If a local fine-tuned embedding model exists, prefer it to improve domain recall.
+    # CN: 如果存在本地微调后的 embedding 模型，优先使用以提升领域召回。
+    local_embedding_dir = os.getenv("LOCAL_EMBEDDING_MODEL_DIR")
+    if local_embedding_dir:
+        from sentence_transformers import SentenceTransformer
+
+        st_model = SentenceTransformer(local_embedding_dir)
+        embedding_dim = st_model.get_sentence_embedding_dimension()
+        if embedding_dim is None:
+            raise RuntimeError(
+                "Failed to infer embedding dimension from the local SentenceTransformer model."
+            )
+        embedding_dim = int(embedding_dim)
+
+        def local_embed(texts):
+            from typing import Any
+
+            if isinstance(texts, str):
+                texts = [texts]
+            vectors: Any = st_model.encode(
+                list(texts),
+                batch_size=32,
+                show_progress_bar=False,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+            )
+            return vectors.tolist()
+
+        embedding_func = EmbeddingFunc(
+            embedding_dim=embedding_dim,
+            max_token_size=512,
+            func=local_embed,
+        )
+    else:
+        embedding_func = EmbeddingFunc(
+            embedding_dim=2048,
+            max_token_size=8192,
+            func=lambda texts: zhipu_embedding(
+                texts,
+                model="embedding-3",
+                api_key=api_key,
+            ),
+        )
 
     # Initialize RAGAnything
     rag = RAGAnything(

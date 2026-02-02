@@ -5,26 +5,36 @@ venv_alloykg\Scripts\activate
 pip install -r requirements.txt
 
 #Enter ZHIPU API KEY
-$env:ZHIPU_API_KEY="a3d236a6017d4cfc9f15c509a3e7c786.eZIIBa9QmssnGEsv"
+# EN: Never commit real API keys. Use an environment variable (or a local .env file).
+$env:ZHIPU_API_KEY="<YOUR_ZHIPU_API_KEY>"
+
+# -------------------------
+# Embedding fine-tuning (TSDAE)
+# -------------------------
+# Train a domain-adapted embedding model from parsed paper JSON (no labels required)
+python src/train_embedding.py --input-glob "data/paper_json/**/*_content_list.json" --output-dir models/tsdae-embedding
+
+# Use the trained embedding model in RAG
+$env:LOCAL_EMBEDDING_MODEL_DIR="models/tsdae-embedding"
 
 
-python parse_papers.py
+python src/parse_papers.py
 
 #Using SQlite database
 #Checking the format of the table and the data of first 20 rows
-python inspect_db.py ../data/materials.db
+python src/inspect_db.py ../data/materials.db
 #Checking the format of the table and the data of first 50 rows
-python inspect_db.py materials.db 50
+python src/inspect_db.py materials.db 50
 #Export a table to a csv file
-python inspect_db.py materials.db --export Materials
-python inspect_db.py materials.db --export sqlite_sequence
-python inspect_db.py materials.db --export Properties
+python src/inspect_db.py materials.db --export Materials
+python src/inspect_db.py materials.db --export sqlite_sequence
+python src/inspect_db.py materials.db --export Properties
 
 #Extract triplets from database
-python extract_triplets_db.py
+python src/extract_triplets_db.py
 
 #Extract triplets from parsed-paper json
-python extract_triplets_json.py
+python src/extract_triplets_json.py
 
 #End to end RAG-anything
-python ragall.py
+python src/ragall.py

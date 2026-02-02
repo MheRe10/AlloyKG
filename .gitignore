@@ -7,3 +7,6 @@
 
 data/
 venv_alloykg/
+
+# Local ML artifacts
+models/
