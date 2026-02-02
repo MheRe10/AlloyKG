@@ -7,18 +7,18 @@ from lightrag.utils import EmbeddingFunc
 from raganything.modalprocessors import ImageModalProcessor, TableModalProcessor, GenericModalProcessor
 
 # -------------------------
-# 配置 API 与路径
+# set up API and paths
 # -------------------------
 API_KEY = os.getenv("ZHIPU_API_KEY")
 RAG_STORAGE = "../data/raw_paper"
 OUTPUT_DIR = "../data/processed_paper"
 
 # -------------------------
-# LightRAG 初始化
+# LightRAG initialization
 # -------------------------
 client = ZhipuAI(api_key=API_KEY)
 
-# 智谱GLM-4.0异步调用
+# Zhipu GLM-4 async call
 async def glm4_complete(prompt: str, system_prompt=None, history_messages=[], **kwargs):
     loop = asyncio.get_event_loop()
     def sync_call():
@@ -56,14 +56,14 @@ async def main():
         embedding_func=EmbeddingFunc(
             embedding_dim=3072,
             max_token_size=8192,
-            func=lambda texts: None  # 智谱暂不提供embedding
+            func=lambda texts: None  # Zhipu embedding function can be added here
         ),
     )
 
     await rag.process_folder_complete(
-        folder_path="../data/raw_paper",      # 你的PDF文件夹路径
-        output_dir="../data/processed_paper",  # 输出目录
-        file_extensions=[".pdf"],       # 只处理PDF
+        folder_path="../data/raw_paper",     
+        output_dir="../data/processed_paper",  
+        file_extensions=[".pdf"], 
         recursive=True,
         max_workers=4
     )

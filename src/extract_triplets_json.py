@@ -11,6 +11,7 @@ client = ZhipuAI(api_key=os.getenv("ZHIPU_API_KEY"))
 # ========= 用智谱大模型抽取三元组 =========
 def extract_triples_from_text(text: str):
     if not text.strip():
+        # EN: Skip empty input to avoid wasting tokens and generating noisy triples.
         return [] #筛掉空输入
     prompt = f"""
             请从以下材料信息中提取制作知识图谱的三元组(entity1, relation, entity2)，
@@ -18,7 +19,8 @@ def extract_triples_from_text(text: str):
             包括材料名称、类别、特性、应用等，如果输入是作者、发表时间等无关信息，则可以不输出。每行一个三元组：
             "{text}"
             """
-    print(prompt)
+    # EN: The prompt is written in Chinese to instruct GLM-4 to extract KG triplets in a strict CSV-friendly format.
+    print(prompt)  # EN: Debug output of the full (Chinese) prompt sent to the model.
     response = client.chat.completions.create(
         model="glm-4",
         messages=[{"role": "user", "content": prompt}],
@@ -85,5 +87,5 @@ if __name__ == "__main__":
             df = pd.DataFrame(triples, columns=["Entity1",  "Relation", "Entity2"])
             output_path = os.path.join(output_dir, filename.replace(".json", "_triples.csv"))
             df.to_csv(output_path, index=False, encoding="utf-8-sig")
-            print(f"已处理并保存: {output_path}")
+            print(f"已处理并保存: {output_path}")  # EN: Processed and saved.
 

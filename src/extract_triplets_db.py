@@ -5,21 +5,21 @@ import pandas as pd
 from zhipuai import ZhipuAI
 
 # -------------------------
-# 配置 API 与路径
+# set up API and paths
 # -------------------------
 API_KEY = os.getenv("ZHIPU_API_KEY")
-RAW_CSV_FOLDER = "../data/db_csv"        # 原始 CSV 文件夹
-OUTPUT_DIR = "../data/db_triplets" # 输出三元组目录
+RAW_CSV_FOLDER = "../data/db_csv" 
+OUTPUT_DIR = "../data/db_triplets"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # -------------------------
-# 初始化智谱客户端
+# Initialize ZhipuAI client
 # -------------------------
 client = ZhipuAI(api_key=API_KEY)
 
 # -------------------------
-# 异步调用智谱 GLM-4
+# Zhipu GLM-4 async call
 # -------------------------
 async def glm4_complete(prompt: str, system_prompt=None, history_messages=[], **kwargs):
     loop = asyncio.get_event_loop()
@@ -42,7 +42,7 @@ async def glm4_complete(prompt: str, system_prompt=None, history_messages=[], **
     return await loop.run_in_executor(None, sync_call)
 
 # -------------------------
-# CSV -> 文本
+# CSV -> Text
 # -------------------------
 def materials_csv_to_text(csv_file, N):
     df = pd.read_csv(csv_file, nrows=N)
@@ -73,19 +73,21 @@ def properties_csv_to_text(csv_file, N):
     return "\n".join(texts)
 
 # -------------------------
-# 提取三元组
+# Extract triplets from CSV
 # -------------------------
 async def extract_triplets_from_csv(csv_file, N):
 
     df = pd.read_csv(csv_file, nrows=0)
     columns = set(df.columns)
-    # 判断用哪个转换函数
+    # Determine which conversion function to use based on CSV schema.
     if {"name", "categories", "notes", "keywords"}.issubset(columns):
         csv_text = materials_csv_to_text(csv_file, N)
     elif {"material_id", "property_type", "property_name", "metric_value", "english_value", "comments"}.issubset(columns):
         csv_text = properties_csv_to_text(csv_file, N)
     else:
-        raise ValueError("未知的CSV格式")
+        raise ValueError("未知的CSV格式")  # EN: Unknown/unrecognized CSV schema.
+
+    # EN: The prompt is written in Chinese to instruct GLM-4 to extract KG triplets in a strict CSV-friendly format.
     prompt = f"""
             请从以下材料信息中提取制作知识图谱的三元组(entity1,  relation, entity2)，
             请保证三元组格式正确，内容完整，同时输出时每行的格式为entity1, relation, entity2，不需要序号、括号等冗余字符。
@@ -94,7 +96,7 @@ async def extract_triplets_from_csv(csv_file, N):
             """
     triplets_text = await glm4_complete(prompt)
     
-    # 简单解析成三元组列表
+    # Simply parse the output into a list of triplets
     triplets = []
     for line in triplets_text.splitlines():
         line = line.strip()
@@ -107,7 +109,7 @@ async def extract_triplets_from_csv(csv_file, N):
     return triplets
 
 # -------------------------
-# 保存三元组 CSV
+# Save triplets to CSV
 # -------------------------
 def save_triplets_csv(triplets, output_file):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -118,7 +120,7 @@ def save_triplets_csv(triplets, output_file):
     print(f"Triplets saved to {output_file}")
 
 # -------------------------
-# 批量处理 CSV 文件夹
+# Batch process CSV folder
 # -------------------------
 async def process_csv_folder(csv_folder):
     for filename in os.listdir(csv_folder):
@@ -132,7 +134,7 @@ async def process_csv_folder(csv_folder):
             save_triplets_csv(triplets, output_file)
 
 # -------------------------
-# 主程序
+# Main function
 # -------------------------
 if __name__ == "__main__":
     asyncio.run(process_csv_folder(RAW_CSV_FOLDER))

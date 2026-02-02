@@ -2,5 +2,8 @@
 *.json
 *.csv
 
+.env
+.env.*
+
 data/
 venv_alloykg/

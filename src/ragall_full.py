@@ -8,17 +8,29 @@ import os
 
 async def load_existing_lightrag():
     # Set up API configuration
-    api_key = "a3d236a6017d4cfc9f15c509a3e7c786.eZIIBa9QmssnGEsv"
-    base_url = "your-base-url"  # Optional
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except Exception:
+        pass
+
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Missing ZHIPU_API_KEY. Set it as an environment variable (or create a local .env file)."
+        )
+
+    base_url = os.getenv("ZHIPU_BASE_URL", "")  # Optional; kept for commented-out OpenAI example
 
     # First, create or load existing LightRAG instance
     lightrag_working_dir = "../data/end_to_end/rag_storage/rag_storage_full"
 
     # Check if previous LightRAG instance exists
     if os.path.exists(lightrag_working_dir) and os.listdir(lightrag_working_dir):
-        print("✅ Found existing LightRAG instance, loading...")
+        print("Found existing LightRAG instance, loading...")
     else:
-        print("❌ No existing LightRAG instance found, will create new one")
+        print("No existing LightRAG instance found, will create new one")
 
     # Create/load LightRAG instance with your configuration
     lightrag_instance = LightRAG(
@@ -46,14 +58,21 @@ async def load_existing_lightrag():
     await lightrag_instance.initialize_storages()
     await initialize_pipeline_status()
 
-    def vision_model_func(
-        prompt, system_prompt=None, history_messages=[], 
+    async def vision_model_func(
+        prompt, system_prompt=None, history_messages=[],
         image_data=None, messages=None, **kwargs
     ):
         if messages or image_data:
             print("Vision model function with multimodal input is not implemented yet.")
-        else:
-            return lightrag_instance.llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+            return "Image processing is not implemented yet."
+
+        if not lightrag_instance.llm_model_func:
+            raise RuntimeError("LightRAG instance has no llm_model_func configured.")
+
+        result = lightrag_instance.llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
         
         
     #TODO: Define vision model function for image processing
