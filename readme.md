@@ -5,18 +5,32 @@ venv_alloykg\Scripts\activate
 pip install -r requirements.txt
 
 #Enter ZHIPU API KEY
-# EN: Never commit real API keys. Use an environment variable (or a local .env file).
+
 $env:ZHIPU_API_KEY="<YOUR_ZHIPU_API_KEY>"
 
 # -------------------------
+
 # Embedding fine-tuning (TSDAE)
+
 # -------------------------
+
 # Train a domain-adapted embedding model from parsed paper JSON (no labels required)
+
 python src/train_embedding.py --input-glob "data/paper_json/**/*_content_list.json" --output-dir models/tsdae-embedding
 
 # Use the trained embedding model in RAG
+
 $env:LOCAL_EMBEDDING_MODEL_DIR="models/tsdae-embedding"
 
+# -------------------------
+
+# Offline retrieval-only (no LLM / no API key)
+
+# -------------------------
+
+# Print top-k matching chunks from data/end_to_end/rag_storage using the local embedding model.
+
+python src/ragall_offline.py --query "According to the paper, what's the difference of using TiO2 or TiH2 as the initial material to prepare Fe-Ti alloy?"
 
 python src/parse_papers.py
 
