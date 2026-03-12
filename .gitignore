@@ -8,5 +8,8 @@
 data/
 venv_alloykg/
 
+# Local caches
+.cache/
+
 # Local ML artifacts
 models/

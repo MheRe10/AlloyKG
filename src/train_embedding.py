@@ -25,7 +25,7 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from typing import Iterable, List
+from typing import Iterable, List, cast
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,27 @@ class TrainConfig:
     tie_encoder_decoder: bool
     offline: bool
     noise: str
+    evaluation_steps: int
+    val_size: int
+    early_stopping_patience_steps: int
+    early_stopping_min_delta: float
+
+
+class _EarlyStop(Exception):
+    pass
+
+
+def simple_word_dropout_noise(text: str, dropout: float = 0.3) -> str:
+    # EN: A lightweight noise function that avoids NLTK resources.
+    # CN: 轻量级加噪方式（按空格分词做随机丢词），避免依赖 NLTK 的 punkt 资源。
+    words = [w for w in str(text).split() if w]
+    if len(words) <= 2:
+        return str(text)
+
+    kept = [w for w in words if random.random() > dropout]
+    if len(kept) < 2:
+        kept = words[:2]
+    return " ".join(kept)
 
 
 _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|")
@@ -147,6 +168,21 @@ def train(cfg: TrainConfig) -> None:
     sentences = build_corpus(cfg)
     print(f"Loaded {len(sentences)} sentences for TSDAE training")
 
+    # Hold-out split for unsupervised evaluation / early stopping.
+    # Note: TSDAE does not require labels. We track a proxy metric on a small hold-out:
+    # mean cosine similarity between clean sentences and their noised versions.
+    val_size = int(cfg.val_size)
+    if val_size > 0:
+        # Keep validation small; ensure train is non-empty.
+        val_size = min(val_size, max(10, len(sentences) // 5))
+    else:
+        val_size = 0
+
+    val_sentences = sentences[-val_size:] if val_size > 0 else []
+    train_sentences = sentences[:-val_size] if val_size > 0 else sentences
+    if not train_sentences:
+        train_sentences = sentences
+
     # EN: Downloading HF models can be flaky on some Windows setups. Use cache + retries.
     # CN: Windows 下模型下载可能不稳定；这里使用 cache 并做简单重试。
     base_model = cfg.base_model
@@ -179,23 +215,11 @@ def train(cfg: TrainConfig) -> None:
             "If the download was interrupted, re-run the command; HuggingFace will resume from cache."
         ) from last_exc
 
-    def simple_word_dropout_noise(text: str, dropout: float = 0.3) -> str:
-        # EN: A lightweight noise function that avoids NLTK resources.
-        # CN: 轻量级加噪方式（按空格分词做随机丢词），避免依赖 NLTK 的 punkt 资源。
-        words = [w for w in str(text).split() if w]
-        if len(words) <= 2:
-            return str(text)
-
-        kept = [w for w in words if random.random() > dropout]
-        if len(kept) < 2:
-            kept = words[:2]
-        return " ".join(kept)
-
     if cfg.noise == "nltk":
-        train_dataset = datasets.DenoisingAutoEncoderDataset(sentences)
+        train_dataset = datasets.DenoisingAutoEncoderDataset(train_sentences)
     else:
         train_dataset = datasets.DenoisingAutoEncoderDataset(
-            sentences,
+            train_sentences,
             noise_fn=simple_word_dropout_noise,
         )
     train_dataloader = DataLoader(
@@ -218,14 +242,80 @@ def train(cfg: TrainConfig) -> None:
 
     os.makedirs(cfg.output_dir, exist_ok=True)
 
-    model.fit(
-        train_objectives=[(train_dataloader, train_loss)],
-        epochs=cfg.epochs,
-        warmup_steps=warmup_steps,
-        optimizer_params={"lr": cfg.lr},
-        show_progress_bar=True,
-        output_path=cfg.output_dir,
-    )
+    evaluator = None
+    if val_sentences:
+        import numpy as np
+        from sentence_transformers.evaluation import SentenceEvaluator
+
+        class MeanCosineNoisedEvaluator(SentenceEvaluator):
+            def __init__(self, sents: List[str]):
+                self.sents = list(sents)
+
+            def __call__(
+                self,
+                model,
+                output_path: str | None = None,
+                epoch: int = -1,
+                steps: int = -1,
+            ) -> float:
+                noised = [simple_word_dropout_noise(s) for s in self.sents]
+                emb_clean = model.encode(self.sents, normalize_embeddings=True, show_progress_bar=False)
+                emb_noised = model.encode(noised, normalize_embeddings=True, show_progress_bar=False)
+                score = float((np.asarray(emb_clean) * np.asarray(emb_noised)).sum(axis=1).mean())
+                if output_path:
+                    os.makedirs(output_path, exist_ok=True)
+                    with open(os.path.join(output_path, "val_metrics.txt"), "a", encoding="utf-8") as f:
+                        f.write(f"epoch={epoch}\tsteps={steps}\tmean_cos={score:.6f}\n")
+                return score
+
+        evaluator = MeanCosineNoisedEvaluator(val_sentences)
+
+    best = {"score": float("-inf"), "step": 0}
+
+    def early_stopping_callback(score: float, epoch: int, steps: int) -> None:
+        # steps is the training step at which evaluation happened; at end-of-epoch it is -1.
+        cur_step = int(steps if steps is not None and steps >= 0 else (epoch + 1) * steps_per_epoch)
+        min_delta = float(cfg.early_stopping_min_delta)
+        if float(score) > (best["score"] + min_delta):
+            best["score"] = float(score)
+            best["step"] = cur_step
+            return
+
+        patience = int(cfg.early_stopping_patience_steps)
+        if patience > 0 and (cur_step - int(best["step"])) >= patience:
+            raise _EarlyStop(
+                f"Early stopping: no improvement for {patience} steps "
+                f"(best={best['score']:.6f} at step={best['step']}, last={float(score):.6f} at step={cur_step})."
+            )
+
+    try:
+        if evaluator is not None:
+            from sentence_transformers.evaluation import SentenceEvaluator
+
+            model.fit(
+                train_objectives=[(train_dataloader, train_loss)],
+                evaluator=cast(SentenceEvaluator, evaluator),
+                epochs=cfg.epochs,
+                warmup_steps=warmup_steps,
+                optimizer_params={"lr": cfg.lr},
+                evaluation_steps=int(cfg.evaluation_steps),
+                callback=early_stopping_callback,
+                show_progress_bar=True,
+                output_path=cfg.output_dir,
+                save_best_model=True,
+            )
+        else:
+            model.fit(
+                train_objectives=[(train_dataloader, train_loss)],
+                epochs=cfg.epochs,
+                warmup_steps=warmup_steps,
+                optimizer_params={"lr": cfg.lr},
+                show_progress_bar=True,
+                output_path=cfg.output_dir,
+            )
+    except _EarlyStop as e:
+        # fit() saves best model to output_path when score improves.
+        print(str(e))
 
     print(f"Saved TSDAE embedding model to: {cfg.output_dir}")
     print(
@@ -294,6 +384,34 @@ def parse_args() -> TrainConfig:
         ),
     )
 
+    p.add_argument(
+        "--evaluation-steps",
+        type=int,
+        default=500,
+        help="Run evaluator every N training steps (0 disables mid-epoch eval).",
+    )
+    p.add_argument(
+        "--val-size",
+        type=int,
+        default=200,
+        help="Hold-out sentences for unsupervised evaluation / early stopping (0 disables).",
+    )
+    p.add_argument(
+        "--early-stopping-patience-steps",
+        type=int,
+        default=500,
+        help=(
+            "Early stopping patience in training steps (based on evaluator score). "
+            "Set 0 to disable. Note: small smoke tests usually won't trigger it."
+        ),
+    )
+    p.add_argument(
+        "--early-stopping-min-delta",
+        type=float,
+        default=1e-4,
+        help="Minimum score improvement to reset early-stopping patience.",
+    )
+
     args = p.parse_args()
     return TrainConfig(
         input_glob=args.input_glob,
@@ -309,6 +427,10 @@ def parse_args() -> TrainConfig:
         tie_encoder_decoder=bool(args.tie_encoder_decoder),
         offline=bool(args.offline),
         noise=str(args.noise),
+        evaluation_steps=int(args.evaluation_steps),
+        val_size=int(args.val_size),
+        early_stopping_patience_steps=int(args.early_stopping_patience_steps),
+        early_stopping_min_delta=float(args.early_stopping_min_delta),
     )
 
 
