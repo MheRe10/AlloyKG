@@ -32,7 +32,25 @@ class Chunk:
     file_path: str
 
 
-def _load_chunks(chunks_json_path: str, max_chunks: int) -> List[Chunk]:
+def _should_keep_chunk(content: str, *, min_chars: int, exclude_prefixes: List[str]) -> bool:
+    text = str(content or "").strip()
+    if not text:
+        return False
+    if min_chars > 0 and len(text) < min_chars:
+        return False
+    for prefix in exclude_prefixes:
+        if prefix and text.lower().startswith(prefix.lower()):
+            return False
+    return True
+
+
+def _load_chunks(
+    chunks_json_path: str,
+    *,
+    max_chunks: int,
+    min_chars: int,
+    exclude_prefixes: List[str],
+) -> List[Chunk]:
     with open(chunks_json_path, "r", encoding="utf-8") as f:
         data: Dict[str, Any] = json.load(f)
 
@@ -42,7 +60,7 @@ def _load_chunks(chunks_json_path: str, max_chunks: int) -> List[Chunk]:
             continue
         content = str(item.get("content", ""))
         file_path = str(item.get("file_path", ""))
-        if not content.strip():
+        if not _should_keep_chunk(content, min_chars=min_chars, exclude_prefixes=exclude_prefixes):
             continue
         chunks.append(Chunk(chunk_id=chunk_id, content=content, file_path=file_path))
         if max_chunks > 0 and len(chunks) >= max_chunks:
@@ -97,6 +115,21 @@ def main() -> int:
         help="Limit number of chunks to embed (0 = no limit).",
     )
     p.add_argument(
+        "--min-chars",
+        type=int,
+        default=40,
+        help="Drop very short chunks before embedding.",
+    )
+    p.add_argument(
+        "--exclude-prefix",
+        action="append",
+        default=["Image Content Analysis"],
+        help=(
+            "Exclude chunks whose content starts with this prefix. "
+            "Can be specified multiple times. Default filters out image-analysis chunks."
+        ),
+    )
+    p.add_argument(
         "--preview-chars",
         type=int,
         default=220,
@@ -118,7 +151,12 @@ def main() -> int:
             "Run src/ragall.py document processing first, or point --storage-dir to the correct folder."
         )
 
-    chunks = _load_chunks(chunks_path, max_chunks=int(args.max_chunks))
+    chunks = _load_chunks(
+        chunks_path,
+        max_chunks=int(args.max_chunks),
+        min_chars=int(args.min_chars),
+        exclude_prefixes=list(args.exclude_prefix),
+    )
 
     from sentence_transformers import SentenceTransformer
 
